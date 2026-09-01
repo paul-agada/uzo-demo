@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uzo (PADT) · Fleet Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{
+    --bg:#0a0f16;
+    --panel:#111924;
+    --panel-2:#0d141d;
+    --raised:#16202c;
+    --border:#22303d;
+    --border-soft:#1a2530;
+    --text:#e6edf3;
+    --text-dim:#8fa3b3;
+    --text-faint:#516070;
+    --accent:#2fd3c2;
+    --accent-dim:rgba(47,211,194,.14);
+    --route2:#4c8dff;
+    --route2-dim:rgba(76,141,255,.14);
+    --warn:#e8a33d;
+    --warn-dim:rgba(232,163,61,.14);
+    --danger:#ea4f4a;
+    --danger-dim:rgba(234,79,74,.16);
+    --good:#3fbe7a;
+    --good-dim:rgba(63,190,122,.14);
+    --info:#4c8dff;
+    --info-dim:rgba(76,141,255,.14);
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --sans: 'Inter', -apple-system, sans-serif;
+    --radius: 3px;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:13.5px;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+  }
+
+  /* ---------- App shell ---------- */
+  .app{
+    display:grid;
+    grid-template-columns:64px 1fr;
+    grid-template-rows:52px 1fr 30px;
+    grid-template-areas:
+      "rail topbar"
+      "rail main"
+      "rail statusbar";
+    height:100vh;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    grid-area:topbar;
+    background:var(--panel);
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    padding:0 18px;
+    gap:22px;
+  }
+  .brand{
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+    font-family:var(--mono);
+    letter-spacing:.02em;
+  }
+  .brand-mark{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 0 3px var(--accent-dim);
+    flex:none;
+  }
+  .brand-name{font-weight:600;font-size:14.5px;color:var(--text);}
+  .brand-sub{color:var(--text-faint);font-size:12px;}
+
+  .topbar-divider{width:1px;height:22px;background:var(--border);}
+
+  .fleet-pulse{
+    display:flex;align-items:center;gap:18px;
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:var(--text-dim);
+  }
+  .fleet-pulse b{color:var(--text);font-weight:600;}
+  .pulse-dot{
+    width:6px;height:6px;border-radius:50%;background:var(--good);
+    display:inline-block;margin-right:6px;
+    animation:blink 2.4s ease-in-out infinite;
+  }
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:.35;}}
+
+  .topbar-right{
+    margin-left:auto;
+    display:flex;align-items:center;gap:16px;
+  }
+  .clock{
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--text);
+    letter-spacing:.02em;
+  }
+  .clock .date{color:var(--text-faint);margin-right:8px;}
+  .operator{
+    display:flex;align-items:center;gap:8px;
+    font-size:12.5px;color:var(--text-dim);
+    border:1px solid var(--border);
+    padding:5px 10px;
+    border-radius:var(--radius);
+  }
+  .operator .avatar{
+    width:18px;height:18px;border-radius:50%;
+    background:linear-gradient(135deg,var(--info),#2a5fd0);
+    display:flex;align-items:center;justify-content:center;
+    font-size:9px;font-weight:700;color:#fff;
+  }
+
+  /* ---------- Left rail ---------- */
+  .rail{
+    grid-area:rail;
+    background:var(--panel-2);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    align-items:center;
+    padding:12px 0;
+    gap:4px;
+  }
+  .rail-logo{
+    width:32px;height:32px;
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-weight:700;font-size:12px;
+    color:var(--accent);
+    margin-bottom:14px;
+  }
+  .rail-btn{
+    width:44px;height:44px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:4px;
+    background:transparent;
+    border:none;
+    border-radius:var(--radius);
+    color:var(--text-faint);
+    cursor:pointer;
+    position:relative;
+  }
+  .rail-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.6;}
+  .rail-btn span{font-size:8.5px;font-family:var(--mono);letter-spacing:.02em;}
+  .rail-btn:hover{color:var(--text-dim);background:var(--raised);}
+  .rail-btn.active{color:var(--accent);background:var(--accent-dim);}
+  .rail-btn.active::before{
+    content:"";position:absolute;left:-1px;top:8px;bottom:8px;width:2px;
+    background:var(--accent);border-radius:2px;
+  }
+  .rail-btn .badge{
+    position:absolute;top:2px;right:6px;
+    background:var(--danger);color:#fff;
+    font-family:var(--mono);font-size:9px;font-weight:700;
+    border-radius:8px;padding:0 4px;line-height:14px;min-width:14px;text-align:center;
+  }
+  .rail-spacer{flex:1;}
+  .rail-foot{color:var(--text-faint);font-size:9px;font-family:var(--mono);writing-mode:vertical-rl;padding-bottom:10px;}
+
+  /* ---------- Status bar ---------- */
+  .statusbar{
+    grid-area:statusbar;
+    background:var(--panel);
+    border-top:1px solid var(--border);
+    display:flex;align-items:center;
+    padding:0 16px;
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--text-faint);
+    gap:18px;
+  }
+  .statusbar b{color:var(--text-dim);}
+  .status-right{margin-left:auto;display:flex;gap:18px;}
+  .conn-ok{color:var(--good);}
+
+  /* ---------- Main ---------- */
+  .main{
+    grid-area:main;
+    overflow:auto;
+    position:relative;
+  }
+  .view{display:none;padding:18px 22px 28px;}
+  .view.active{display:block;}
+
+  .view-header{
+    display:flex;align-items:baseline;justify-content:space-between;
+    margin-bottom:16px;
+  }
+  .view-title{font-size:16px;font-weight:600;letter-spacing:-.01em;}
+  .view-title .count{color:var(--text-faint);font-weight:400;font-family:var(--mono);font-size:12.5px;margin-left:8px;}
+  .view-actions{display:flex;gap:8px;}
+
+  .btn{
+    font-family:var(--sans);
+    font-size:12px;font-weight:500;
+    background:var(--raised);
+    border:1px solid var(--border);
+    color:var(--text-dim);
+    padding:6px 12px;
+    border-radius:var(--radius);
+    cursor:pointer;
+  }
+  .btn:hover{color:var(--text);border-color:#354350;}
+  .btn.primary{background:var(--accent-dim);border-color:rgba(47,211,194,.35);color:var(--accent);}
+  .btn.route2{background:var(--route2-dim);border-color:rgba(76,141,255,.35);color:var(--route2);}
+
+  /* ---------- Emergency banner ---------- */
+  .emergency-banner{
+    display:flex;align-items:center;gap:12px;
+    background:linear-gradient(90deg,rgba(234,79,74,.18),rgba(234,79,74,.05));
+    border:1px solid rgba(234,79,74,.4);
+    border-radius:var(--radius);
+    padding:10px 14px;
+    margin-bottom:16px;
+  }
+  .emergency-banner .dot{
+    width:8px;height:8px;border-radius:50%;background:var(--danger);
+    box-shadow:0 0 0 4px var(--danger-dim);
+    animation:blink 1.1s ease-in-out infinite;
+    flex:none;
+  }
+  .emergency-banner .msg{font-size:13px;color:#ffdad8;}
+  .emergency-banner .msg b{font-family:var(--mono);}
+  .emergency-banner .actions{margin-left:auto;display:flex;gap:8px;}
+
+  /* ---------- KPI strip ---------- */
+  .kpi-strip{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:10px;
+    margin-bottom:20px;
+  }
+  .kpi{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:14px 16px;
+    position:relative;
+    overflow:hidden;
+  }
+  .kpi::before{
+    content:"";position:absolute;left:0;top:0;bottom:0;width:2px;
+    background:var(--kpi-color,var(--accent));
+  }
+  .kpi-label{font-size:10.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono);}
+  .kpi-value{font-size:24px;font-weight:700;font-family:var(--mono);margin-top:6px;letter-spacing:-.01em;}
+  .kpi-value small{font-size:13px;color:var(--text-faint);font-weight:500;}
+  .kpi-sub{font-size:11px;color:var(--text-dim);margin-top:4px;}
+
+  .grid-2{display:grid;grid-template-columns:1.6fr 1fr;gap:14px;}
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .panel-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 14px;
+    border-bottom:1px solid var(--border);
+    background:var(--panel-2);
+  }
+  .panel-head h3{margin:0;font-size:12.5px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;}
+  .panel-body{padding:0;}
+
+  /* ---------- Route mini-status list ---------- */
+  .route-row{
+    display:flex;align-items:center;gap:10px;
+    padding:10px 14px;
+    border-bottom:1px solid var(--border-soft);
+    font-size:12.5px;
+  }
+  .route-row:last-child{border-bottom:none;}
+  .route-chip{
+    font-family:var(--mono);font-weight:700;font-size:11.5px;
+    background:var(--raised);border:1px solid var(--border);
+    padding:3px 7px;border-radius:2px;min-width:44px;text-align:center;
+  }
+  .route-row .rr-name{color:var(--text-dim);flex:1;}
+  .route-row .rr-stat{font-family:var(--mono);font-size:11.5px;}
+
+  /* ---------- Tables ---------- */
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  thead th{
+    text-align:left;
+    font-family:var(--mono);
+    font-weight:500;
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--text-faint);
+    padding:9px 12px;
+    border-bottom:1px solid var(--border);
+    background:var(--panel-2);
+    white-space:nowrap;
+  }
+  tbody td{
+    padding:9px 12px;
+    border-bottom:1px solid var(--border-soft);
+    color:var(--text-dim);
+    white-space:nowrap;
+  }
+  tbody tr{cursor:pointer;transition:background .1s;}
+  tbody tr:hover{background:var(--raised);}
+  tbody tr.selected{background:var(--accent-dim);}
+  tbody tr.row-emergency{background:var(--danger-dim);}
+  tbody tr.row-emergency:hover{background:rgba(234,79,74,.24);}
+  tbody tr.row-emergency td{color:#ffd7d5;}
+
+  .veh-id{font-family:var(--mono);font-weight:700;color:var(--text);}
+  .route-tag{
+    font-family:var(--mono);font-size:11px;font-weight:600;
+    background:var(--raised);border:1px solid var(--border);
+    padding:2px 6px;border-radius:2px;color:var(--text-dim);
+  }
+  .route-tag.rt-lg01{border-color:rgba(47,211,194,.4);color:var(--accent);background:var(--accent-dim);}
+  .route-tag.rt-lg02{border-color:rgba(76,141,255,.4);color:var(--route2);background:var(--route2-dim);}
+  .dest{color:var(--text);}
+  .dev{font-family:var(--mono);font-weight:600;}
+  .dev.good{color:var(--good);}
+  .dev.warn{color:var(--warn);}
+  .dev.danger{color:var(--danger);}
+  .driver-cell{display:flex;align-items:center;gap:7px;color:var(--text);}
+  .driver-dot{width:6px;height:6px;border-radius:50%;background:var(--good);flex:none;}
+  .driver-dot.offline{background:var(--text-faint);}
+  .status-pill{
+    font-family:var(--mono);font-size:10.5px;font-weight:600;
+    padding:2px 7px;border-radius:8px;
+    display:inline-flex;align-items:center;gap:5px;
+  }
+  .status-pill.ontime{background:var(--good-dim);color:var(--good);}
+  .status-pill.late{background:var(--warn-dim);color:var(--warn);}
+  .status-pill.emergency{background:var(--danger-dim);color:var(--danger);}
+
+  /* ---------- Event console action buttons ---------- */
+  .ack-btn{
+    font-family:var(--sans);font-size:11.5px;font-weight:500;
+    border:1px solid var(--border);background:var(--raised);color:var(--text-dim);
+    padding:4px 10px;border-radius:2px;cursor:pointer;
+  }
+  .ack-btn:hover{color:var(--text);}
+  .ack-btn.done{background:var(--good-dim);border-color:rgba(63,190,122,.35);color:var(--good);cursor:default;}
+  .ack-btn.urgent{background:var(--danger-dim);border-color:rgba(234,79,74,.4);color:var(--danger);}
+
+  /* ---------- Route diagram (ladder + live map) ---------- */
+  .live-map-panel{
+    background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    margin-bottom:14px;overflow:hidden;
+  }
+  #liveMap{height:360px;width:100%;background:#0d141d;}
+  .map-legend{
+    display:flex;gap:16px;align-items:center;
+    padding:8px 14px;border-top:1px solid var(--border);
+    background:var(--panel-2);
+    font-family:var(--mono);font-size:11px;color:var(--text-dim);
+  }
+  .map-legend .lg{display:flex;align-items:center;gap:6px;}
+  .map-legend .sw{width:14px;height:3px;border-radius:2px;}
+
+  .ladder-wrap{display:flex;gap:16px;align-items:flex-start;}
+  .ladder{
+    background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    flex:1;min-width:280px;
+  }
+  .ladder-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 14px;border-bottom:1px solid var(--border);background:var(--panel-2);
+  }
+  .ladder-head .rt{font-family:var(--mono);font-weight:700;color:var(--accent);}
+  .ladder-head .rt-dest{font-size:11px;color:var(--text-faint);}
+  .ladder-body{
+    display:grid;grid-template-columns:78px 1fr 78px;
+    padding:14px 10px;
+    position:relative;
+  }
+  .ladder-track{
+    grid-column:2;
+    position:relative;
+    padding-left:8px;
+  }
+  .stop{
+    position:relative;
+    padding:6px 0 6px 16px;
+    font-size:11.5px;color:var(--text-dim);
+  }
+  .stop::before{
+    content:"";position:absolute;left:-3px;top:50%;transform:translateY(-50%);
+    width:8px;height:8px;border-radius:50%;background:var(--panel);
+    border:2px solid var(--border);
+  }
+  .stop.active-stop::before{border-color:var(--accent);background:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);}
+  .stop.active-stop{color:var(--text);font-weight:600;}
+
+  .veh-chip{
+    font-family:var(--mono);
+    font-size:10.5px;
+    border-radius:2px;
+    border:1px solid var(--border);
+    background:var(--raised);
+    padding:3px 6px;
+    display:flex;flex-direction:column;
+    line-height:1.35;
+    align-self:center;
+    min-width:56px;
+  }
+  .veh-chip .blk{color:var(--text-faint);}
+  .veh-chip .dv{font-weight:700;}
+  .veh-chip .dv.good{color:var(--good);}
+  .veh-chip .dv.warn{color:var(--warn);}
+  .veh-chip .dv.danger{color:var(--danger);}
+  .veh-chip.left{grid-column:1;justify-self:end;margin-right:-8px;}
+  .veh-chip.right{grid-column:3;justify-self:start;margin-left:-8px;}
+  .chip-row{display:contents;}
+
+  /* ---------- Drawer ---------- */
+  .drawer{
+    position:fixed;top:52px;right:0;bottom:30px;
+    width:380px;
+    background:var(--panel);
+    border-left:1px solid var(--border);
+    transform:translateX(100%);
+    transition:transform .18s ease;
+    z-index:20;
+    overflow-y:auto;
+    box-shadow:-12px 0 30px rgba(0,0,0,.35);
+  }
+  .drawer.open{transform:translateX(0);}
+  .drawer-head{
+    padding:16px;border-bottom:1px solid var(--border);
+    display:flex;align-items:flex-start;justify-content:space-between;
+    background:var(--panel-2);
+  }
+  .drawer-head .veh-big{font-family:var(--mono);font-size:20px;font-weight:700;}
+  .drawer-head .route-tag{margin-top:6px;display:inline-block;}
+  .drawer-close{
+    background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:16px;
+    width:26px;height:26px;
+  }
+  .drawer-close:hover{color:var(--text);}
+  .drawer-section{padding:14px 16px;border-bottom:1px solid var(--border-soft);}
+  .drawer-section h4{margin:0 0 10px;font-size:10.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono);font-weight:600;}
+  .kv{display:flex;justify-content:space-between;padding:4px 0;font-size:12px;}
+  .kv .k{color:var(--text-faint);}
+  .kv .v{color:var(--text);font-family:var(--mono);text-align:right;}
+
+  #drawerMap{
+    height:170px;border-radius:2px;border:1px solid var(--border);
+    background:var(--panel-2);
+  }
+
+  .history-item{display:flex;gap:8px;padding:6px 0;font-size:11.5px;}
+  .history-item .t{font-family:var(--mono);color:var(--text-faint);flex:none;width:52px;}
+  .history-item .e{color:var(--text-dim);}
+
+  .drawer-actions{padding:14px 16px;display:flex;gap:8px;flex-wrap:wrap;}
+  .drawer-actions .btn{flex:1;min-width:100px;text-align:center;}
+
+  .scrim{position:fixed;inset:52px 0 30px 64px;background:rgba(0,0,0,.25);z-index:15;opacity:0;pointer-events:none;transition:opacity .18s;}
+  .scrim.open{opacity:1;pointer-events:auto;}
+
+  ::-webkit-scrollbar{width:9px;height:9px;}
+  ::-webkit-scrollbar-thumb{background:#26323f;border-radius:5px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+
+  .helper-text{color:var(--text-faint);font-size:11.5px;margin-top:10px;}
+
+  /* Leaflet dark tweaks */
+  .leaflet-container{background:#0d141d;font-family:var(--sans);}
+  .leaflet-popup-content-wrapper{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;}
+  .leaflet-popup-tip{background:var(--panel);}
+  .leaflet-popup-content{font-size:12px;font-family:var(--sans);margin:9px 12px;}
+  .leaflet-popup-content b{font-family:var(--mono);}
+  .leaflet-control-zoom a{background:var(--panel) !important;color:var(--text) !important;border-color:var(--border) !important;}
+  .veh-marker{display:flex;align-items:center;justify-content:center;}
+  .veh-marker .core{
+    width:12px;height:12px;border-radius:50%;border:2px solid #0a0f16;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- RAIL -->
+  <nav class="rail">
+    <div class="rail-logo">UZ</div>
+
+    <button class="rail-btn active" data-view="overview" title="Overview">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+      <span>OVERVIEW</span>
+    </button>
+
+    <button class="rail-btn" data-view="vehicles" title="Vehicle Table">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18M3 14h18M9 4v16"/></svg>
+      <span>FLEET</span>
+    </button>
+
+    <button class="rail-btn" data-view="route" title="Route Diagram">
+      <svg viewBox="0 0 24 24"><path d="M7 3v18M17 3v18"/><circle cx="7" cy="7" r="1.6"/><circle cx="7" cy="13" r="1.6"/><circle cx="17" cy="10" r="1.6"/><circle cx="17" cy="17" r="1.6"/></svg>
+      <span>ROUTES</span>
+    </button>
+
+    <button class="rail-btn" data-view="events" title="Event Console">
+      <svg viewBox="0 0 24 24"><path d="M12 2 3 21h18L12 2Z"/><path d="M12 9v5M12 17h.01"/></svg>
+      <span>EVENTS</span>
+      <span class="badge" id="railBadge">1</span>
+    </button>
+
+    <div class="rail-spacer"></div>
+    <div class="rail-foot">UZO (PADT) CONTROL CENTRE · DEMO</div>
+  </nav>
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <span class="brand-name">Uzo</span>
+      <span class="brand-sub">(PADT) · Fleet Control Centre</span>
+    </div>
+    <div class="topbar-divider"></div>
+    <div class="fleet-pulse">
+      <span><span class="pulse-dot"></span><b id="pulseActive">214</b> vehicles reporting</span>
+      <span>On-time <b id="pulseOntime">91.4%</b></span>
+      <span>Avg deviation <b id="pulseDev">+0:14</b></span>
+    </div>
+    <div class="topbar-right">
+      <div class="clock"><span class="date" id="clockDate">10 Nov</span><span id="clockTime">15:38:05</span></div>
+      <div class="operator"><span class="avatar">LA</span> ioadmin</div>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- OVERVIEW -->
+    <section class="view active" id="view-overview">
+      <div class="view-header">
+        <div class="view-title">Network overview<span class="count">Lagos Metropolitan Area · Depot: Oshodi</span></div>
+        <div class="view-actions">
+          <button class="btn">Export snapshot</button>
+          <button class="btn primary">Broadcast advisory</button>
+        </div>
+      </div>
+
+      <div class="emergency-banner" id="emergencyBanner">
+        <span class="dot"></span>
+        <span class="msg">Emergency call in progress — vehicle <b>2282</b>, route <b>LG01</b>, driver <b>ADEYEMI T.</b>, near Obalende Interchange. Comms link unstable.</span>
+        <div class="actions">
+          <button class="btn" onclick="openDrawer('2282')">View vehicle</button>
+          <button class="btn primary" onclick="switchView('events')">Open event console</button>
+        </div>
+      </div>
+
+      <div class="kpi-strip">
+        <div class="kpi" style="--kpi-color:var(--accent)">
+          <div class="kpi-label">Vehicles in service</div>
+          <div class="kpi-value">214<small>/ 219</small></div>
+          <div class="kpi-sub">5 out of contact</div>
+        </div>
+        <div class="kpi" style="--kpi-color:var(--good)">
+          <div class="kpi-label">On schedule</div>
+          <div class="kpi-value">91.4<small>%</small></div>
+          <div class="kpi-sub">within ±2:00 of timetable</div>
+        </div>
+        <div class="kpi" style="--kpi-color:var(--warn)">
+          <div class="kpi-label">Running late</div>
+          <div class="kpi-value">14</div>
+          <div class="kpi-sub">beyond -2:00 deviation</div>
+        </div>
+        <div class="kpi" style="--kpi-color:var(--danger)">
+          <div class="kpi-label">Active alerts</div>
+          <div class="kpi-value">3</div>
+          <div class="kpi-sub">1 emergency · 2 RTT calls</div>
+        </div>
+        <div class="kpi" style="--kpi-color:var(--info)">
+          <div class="kpi-label">Routes tracked</div>
+          <div class="kpi-value">42</div>
+          <div class="kpi-sub">LG01, LG02, BRT03 &amp; more</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><h3>Live vehicle feed</h3><span class="helper-text" style="margin:0;">Updated every 30s</span></div>
+          <div class="panel-body">
+            <table id="overviewTable">
+              <thead><tr><th>Vehicle</th><th>Route</th><th>Position</th><th>Destination</th><th>Deviation</th><th>Driver</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h3>Route status</h3></div>
+          <div class="panel-body" id="routeStatusList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VEHICLE TABLE -->
+    <section class="view" id="view-vehicles">
+      <div class="view-header">
+        <div class="view-title">Vehicle table<span class="count" id="vehCount"></span></div>
+        <div class="view-actions">
+          <input id="vehFilter" placeholder="Filter by vehicle, route or driver…" style="background:var(--raised);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:3px;font-size:12px;width:260px;">
+          <button class="btn">Columns</button>
+        </div>
+      </div>
+      <div class="panel">
+        <table>
+          <thead>
+            <tr>
+              <th>Vehicle</th><th>Route</th><th>Position</th><th>Destination</th>
+              <th>Deviation</th><th>Layover</th><th>Driver</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="vehicleTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ROUTE DIAGRAM -->
+    <section class="view" id="view-route">
+      <div class="view-header">
+        <div class="view-title">Route diagram</div>
+        <div class="view-actions">
+          <button class="btn primary">LG01 · Oshodi ↔ CMS</button>
+          <button class="btn route2">LG02 · Ikorodu ↔ TBS</button>
+          <button class="btn">+ Add route</button>
+        </div>
+      </div>
+
+      <div class="live-map-panel">
+        <div id="liveMap"></div>
+        <div class="map-legend">
+          <span class="lg"><span class="sw" style="background:var(--accent);"></span>LG01 · Oshodi ↔ CMS</span>
+          <span class="lg"><span class="sw" style="background:var(--route2);"></span>LG02 · Ikorodu ↔ TBS</span>
+          <span class="lg"><span class="sw" style="background:var(--danger);border-radius:50%;width:8px;height:8px;"></span>Emergency</span>
+          <span class="lg" style="margin-left:auto;color:var(--text-faint);">© OpenStreetMap contributors · CARTO</span>
+        </div>
+      </div>
+
+      <div class="ladder-wrap" id="ladderWrap"></div>
+    </section>
+
+    <!-- EVENT CONSOLE -->
+    <section class="view" id="view-events">
+      <div class="view-header">
+        <div class="view-title">Event console<span class="count" id="eventCount"></span></div>
+        <div class="view-actions">
+          <button class="btn">Acknowledge all</button>
+        </div>
+      </div>
+      <div class="panel">
+        <table>
+          <thead>
+            <tr><th>Vehicle</th><th>Driver</th><th>Event</th><th>Position</th><th>Route</th><th>Destination</th><th>Timetable</th><th></th></tr>
+          </thead>
+          <tbody id="eventTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- STATUS BAR -->
+  <footer class="statusbar">
+    <span>SELECTION <b id="statusSelection">LG01/ (2268)</b></span>
+    <span>ROWS <b id="statusRows">219 / 219</b></span>
+    <div class="status-right">
+      <span class="conn-ok">● LINK OK</span>
+      <span id="statusUser">ioadmin</span>
+      <span id="statusClock">15:38:05, 10 Nov</span>
+    </div>
+  </footer>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer"></aside>
+
+<script>
+/* ---------------------------------------------------------
+   DUMMY DATA — Lagos, Nigeria
+--------------------------------------------------------- */
+
+// Real-world Lagos stop coordinates [lat, lng]
+const lagosCoords = {
+  "Oshodi":[6.5535,3.3427], "Bolade":[6.5478,3.3512], "Onipanu":[6.5324,3.3661],
+  "Palmgrove":[6.5391,3.3623], "Fadeyi":[6.5262,3.3695], "Jibowu":[6.5157,3.3717],
+  "Yaba":[6.5095,3.3711], "Costain":[6.4762,3.3672], "Iponri":[6.4877,3.3665],
+  "National Theatre":[6.4698,3.3792], "Obalende":[6.4497,3.4098], "CMS":[6.4531,3.3958],
+  "Ikorodu":[6.6018,3.5106], "Mile 12":[6.5822,3.3959], "Ketu":[6.5928,3.3897],
+  "Ojota":[6.5766,3.3745], "Maryland":[6.5675,3.3627], "Anthony":[6.5583,3.3665],
+  "Gbagada":[6.5497,3.3868], "Oworonshoki":[6.5389,3.3841], "Adekunle":[6.5087,3.3838],
+  "Adeniji":[6.4614,3.3934], "TBS":[6.4512,3.4013]
+};
+
+const routesMeta = {
+  LG01:{ name:"Oshodi ↔ CMS", color:"#2fd3c2", cssClass:"rt-lg01" },
+  LG02:{ name:"Ikorodu ↔ TBS", color:"#4c8dff", cssClass:"rt-lg02" }
+};
+
+const routeStops = {
+  LG01: ["Oshodi","Bolade","Onipanu","Palmgrove","Fadeyi","Jibowu","Yaba","Costain","Iponri","National Theatre","Obalende","CMS"],
+  LG02: ["Ikorodu","Mile 12","Ketu","Ojota","Maryland","Anthony","Gbagada","Oworonshoki","Adekunle","Adeniji","TBS"]
+};
+
+const vehicles = [
+  {id:"2282", route:"LG01", position:"Obalende", destination:"CMS Terminal", deviation:-10, layover:0, driver:"ADEYEMI T.", status:"emergency", block:"3115", plate:"LND-282-KJ", type:"Higer Long 9m BRT"},
+  {id:"2268", route:"LG01", position:"Yaba", destination:"CMS Terminal", deviation:-4, layover:41, driver:"—", status:"late", block:"3107", plate:"LND-268-KJ", type:"Higer Long 9m BRT"},
+  {id:"2319", route:"LG01", position:"Oshodi", destination:"CMS Terminal", deviation:-20, layover:52, driver:"OKONKWO R.", status:"late", block:"3125", plate:"LND-319-KJ", type:"Higer Long 9m BRT"},
+  {id:"TS1277", route:"LG01", position:"Palmgrove", destination:"CMS Terminal", deviation:2, layover:420, driver:"Driver 48067", status:"ontime", block:"3172", plate:"—", type:"—"},
+  {id:"TS1278", route:"LG01", position:"Fadeyi", destination:"CMS Terminal", deviation:-50, layover:520, driver:"Driver 58230", status:"late", block:"—", plate:"—", type:"—"},
+  {id:"TS1279", route:"LG01", position:"Onipanu", destination:"CMS Terminal", deviation:-40, layover:590, driver:"Driver 48513", status:"late", block:"—", plate:"—", type:"—"},
+  {id:"TS1343", route:"LG02", position:"Gbagada", destination:"TBS Terminal", deviation:22, layover:300, driver:"Driver 48167", status:"ontime", block:"—", plate:"—", type:"—"},
+  {id:"TS1344", route:"LG02", position:"TBS", destination:"TBS Terminal", deviation:0, layover:1190, driver:"AMOSA F.", status:"ontime", block:"—", plate:"—", type:"—"},
+  {id:"TS1348", route:"LG02", position:"Oworonshoki", destination:"TBS Terminal", deviation:9, layover:540, driver:"Driver 3469", status:"ontime", block:"—", plate:"—", type:"—"},
+  {id:"TS1352", route:"LG02", position:"TBS", destination:"TBS Terminal", deviation:19, layover:0, driver:"OGUNLEYE D.", status:"ontime", block:"—", plate:"—", type:"—"},
+];
+
+const events = [
+  {vehicle:"2282", driver:"ADEYEMI T.", event:"Emergency", severity:"emergency", position:"Obalende", route:"LG01", destination:"CMS Terminal", timetable:"-0:10", ack:false, urgent:true},
+  {vehicle:"2268", driver:"Driver 48972", event:"RTT call", severity:"warn", position:"Yaba", route:"LG01", destination:"CMS Terminal", timetable:"0:00", ack:false, urgent:false},
+  {vehicle:"2319", driver:"OKONKWO R.", event:"Initiate trip chain", severity:"info", position:"Oshodi", route:"LG01", destination:"CMS Terminal", timetable:"-0:20", ack:false, urgent:false},
+  {vehicle:"TS1277", driver:"Driver 48067", event:"Initiate trip chain", severity:"info", position:"Palmgrove", route:"LG01", destination:"CMS Terminal", timetable:"-1:20", ack:false, urgent:false},
+  {vehicle:"—", driver:"—", event:"Duty roster import", severity:"muted", position:"—", route:"—", destination:"—", timetable:"—", ack:true, urgent:false},
+];
+
+const routeChips = {
+  LG01:[
+    {stop:"Bolade", side:"right", block:3152, dev:-40},
+    {stop:"Palmgrove", side:"right", block:3205, dev:-101},
+    {stop:"Jibowu", side:"left", block:3354, dev:-103},
+    {stop:"Yaba", side:"right", block:3160, dev:-42},
+    {stop:"Costain", side:"right", block:3165, dev:2},
+    {stop:"Iponri", side:"right", block:3171, dev:-23},
+    {stop:"National Theatre", side:"right", block:3172, dev:13},
+    {stop:"Oshodi", side:"left", block:3115, dev:-28},
+    {stop:"Obalende", side:"left", block:2282, dev:-10, emergency:true},
+  ],
+  LG02:[
+    {stop:"Ikorodu", side:"left", block:1841, dev:0},
+    {stop:"Maryland", side:"left", block:1838, dev:7},
+    {stop:"Anthony", side:"left", block:1182, dev:-19},
+    {stop:"Ketu", side:"right", block:1404, dev:-41},
+    {stop:"Gbagada", side:"right", block:1835, dev:29},
+    {stop:"Oworonshoki", side:"right", block:1836, dev:-14},
+    {stop:"Ojota", side:"left", block:1401, dev:20},
+    {stop:"Mile 12", side:"left", block:1126, dev:-33},
+    {stop:"Adekunle", side:"right", block:1840, dev:-32},
+    {stop:"Adeniji", side:"right", block:1837, dev:30},
+    {stop:"TBS", side:"right", block:1843, dev:17},
+  ]
+};
+
+/* ---------------------------------------------------------
+   HELPERS
+--------------------------------------------------------- */
+function devClass(dev){
+  if(dev <= -60) return "danger";
+  if(dev < -20 || dev > 40) return "warn";
+  return "good";
+}
+function fmtDev(dev){
+  const sign = dev < 0 ? "-" : "+";
+  const abs = Math.abs(dev);
+  const m = Math.floor(abs/60), s = abs%60;
+  return `${sign}${m}:${String(s).padStart(2,"0")}`;
+}
+function fmtSecs(sec){
+  const m = Math.floor(sec/60);
+  return m>0 ? `+${m}:00` : "0:00";
+}
+function routeTagHTML(route){
+  if(route === "—") return "—";
+  const meta = routesMeta[route];
+  return `<span class="route-tag ${meta ? meta.cssClass : ""}">${route}</span>`;
+}
+
+/* ---------------------------------------------------------
+   RENDER: overview table
+--------------------------------------------------------- */
+function renderOverview(){
+  const tbody = document.querySelector("#overviewTable tbody");
+  tbody.innerHTML = vehicles.slice(0,6).map(v => rowHTML(v)).join("");
+  attachRowClicks(tbody);
+
+  const list = document.getElementById("routeStatusList");
+  const summary = [
+    {route:"LG01", label:"Oshodi ↔ CMS", stat:"-0:22 avg", cls:"warn"},
+    {route:"LG02", label:"Ikorodu ↔ TBS", stat:"+0:08 avg", cls:"good"},
+    {route:"BRT03", label:"Mile 2 ↔ CMS", stat:"on time", cls:"good"},
+    {route:"BRT07", label:"Ikeja ↔ Ojota", stat:"+0:16 avg", cls:"good"},
+    {route:"LSTS12", label:"Ajah ↔ Marina", stat:"-1:04 avg", cls:"danger"},
+  ];
+  list.innerHTML = summary.map(r => `
+    <div class="route-row">
+      <span class="route-chip">${r.route}</span>
+      <span class="rr-name">${r.label}</span>
+      <span class="rr-stat dev ${r.cls}">${r.stat}</span>
+    </div>`).join("");
+}
+
+function rowHTML(v){
+  const dc = devClass(v.deviation);
+  const emergency = v.status === "emergency";
+  return `
+    <tr data-id="${v.id}" class="${emergency ? "row-emergency" : ""}">
+      <td class="veh-id">${v.id}</td>
+      <td>${routeTagHTML(v.route)}</td>
+      <td>${v.position}</td>
+      <td class="dest">${v.destination}</td>
+      <td class="dev ${dc}">${fmtDev(v.deviation)}</td>
+      <td class="driver-cell"><span class="driver-dot ${v.driver==='—'?'offline':''}"></span>${v.driver}</td>
+    </tr>`;
+}
+
+/* ---------------------------------------------------------
+   RENDER: vehicle table
+--------------------------------------------------------- */
+function renderVehicleTable(filter=""){
+  const tbody = document.getElementById("vehicleTableBody");
+  const f = filter.trim().toLowerCase();
+  const rows = vehicles.filter(v =>
+    !f || v.id.toLowerCase().includes(f) || v.route.toLowerCase().includes(f) || v.driver.toLowerCase().includes(f)
+  );
+  document.getElementById("vehCount").textContent = `${rows.length} of ${vehicles.length} vehicles`;
+
+  tbody.innerHTML = rows.map(v => {
+    const dc = devClass(v.deviation);
+    const pill = v.status === "emergency"
+      ? `<span class="status-pill emergency">● emergency</span>`
+      : v.status === "late"
+      ? `<span class="status-pill late">● late</span>`
+      : `<span class="status-pill ontime">● on time</span>`;
+    return `
+      <tr data-id="${v.id}" class="${v.status==='emergency' ? 'row-emergency' : ''}">
+        <td class="veh-id">${v.id}</td>
+        <td>${routeTagHTML(v.route)}</td>
+        <td>${v.position}</td>
+        <td class="dest">${v.destination}</td>
+        <td class="dev ${dc}">${fmtDev(v.deviation)}</td>
+        <td>${fmtSecs(v.layover)}</td>
+        <td class="driver-cell"><span class="driver-dot ${v.driver==='—'?'offline':''}"></span>${v.driver}</td>
+        <td>${pill}</td>
+      </tr>`;
+  }).join("");
+  attachRowClicks(tbody);
+}
+
+function attachRowClicks(tbody){
+  tbody.querySelectorAll("tr").forEach(tr => {
+    tr.addEventListener("click", () => openDrawer(tr.dataset.id));
+  });
+}
+
+/* ---------------------------------------------------------
+   RENDER: route diagram (ladder)
+--------------------------------------------------------- */
+function renderLadders(){
+  const wrap = document.getElementById("ladderWrap");
+  wrap.innerHTML = Object.keys(routeStops).map(route => {
+    const stops = routeStops[route];
+    const chips = routeChips[route];
+    const chipByStop = {};
+    chips.forEach(c => chipByStop[c.stop] = c);
+
+    const activeIdx = Math.floor(stops.length * 0.6);
+
+    const rowsHTML = stops.map((stop, i) => {
+      const chip = chipByStop[stop];
+      const isActive = i === activeIdx;
+      let leftChip = "", rightChip = "";
+      if(chip){
+        const cls = chip.emergency ? "danger" : devClass(chip.dev);
+        const chipHTML = `
+          <div class="veh-chip ${chip.side}">
+            <span class="blk">${chip.emergency ? "🚨 " : ""}${chip.block}</span>
+            <span class="dv ${chip.emergency ? 'danger' : cls}">${fmtDev(chip.dev)}</span>
+          </div>`;
+        if(chip.side === "left") leftChip = chipHTML;
+        else rightChip = chipHTML;
+      }
+      return `
+        <div class="chip-row">
+          ${leftChip || "<div></div>"}
+          <div class="stop ${isActive ? "active-stop" : ""}">${stop}</div>
+          ${rightChip || "<div></div>"}
+        </div>`;
+    }).join("");
+
+    const dest = route === "LG01" ? "CMS Terminal" : "TBS Terminal";
+
+    return `
+      <div class="ladder">
+        <div class="ladder-head">
+          <div><span class="rt">${route}</span> <span class="rt-dest">→ ${dest}</span></div>
+          <span class="helper-text" style="margin:0;">${chips.length} vehicles on route</span>
+        </div>
+        <div class="ladder-body">${rowsHTML}</div>
+      </div>`;
+  }).join("");
+}
+
+/* ---------------------------------------------------------
+   RENDER: event console
+--------------------------------------------------------- */
+function renderEvents(){
+  const tbody = document.getElementById("eventTableBody");
+  document.getElementById("eventCount").textContent = `${events.filter(e=>!e.ack).length} unacknowledged`;
+  document.getElementById("railBadge").textContent = events.filter(e=>e.urgent && !e.ack).length || "";
+  document.getElementById("railBadge").style.display = events.some(e=>e.urgent && !e.ack) ? "flex" : "none";
+
+  tbody.innerHTML = events.map((e, idx) => {
+    const rowCls = e.urgent && !e.ack ? "row-emergency" : "";
+    const eventLabel = e.severity === "emergency"
+      ? `⚠ ${e.event}`
+      : e.severity === "warn" ? `● ${e.event}`
+      : e.event;
+    const actionBtn = e.ack
+      ? `<button class="ack-btn done">✓ Acknowledged</button>`
+      : `<button class="ack-btn ${e.urgent ? "urgent" : ""}" onclick="acknowledge(${idx})">${e.urgent ? "Respond" : "Acknowledge"}</button>`;
+    return `
+      <tr class="${rowCls}" data-id="${e.vehicle}">
+        <td class="veh-id">${e.vehicle}</td>
+        <td>${e.driver}</td>
+        <td>${eventLabel}</td>
+        <td>${e.position}</td>
+        <td>${routeTagHTML(e.route)}</td>
+        <td class="dest">${e.destination}</td>
+        <td class="dev ${e.timetable.startsWith("-") ? "warn" : "good"}">${e.timetable}</td>
+        <td>${actionBtn}</td>
+      </tr>`;
+  }).join("");
+
+  tbody.querySelectorAll("tr").forEach(tr => {
+    tr.addEventListener("click", (ev) => {
+      if(ev.target.tagName === "BUTTON") return;
+      if(tr.dataset.id && tr.dataset.id !== "—") openDrawer(tr.dataset.id);
+    });
+  });
+}
+
+function acknowledge(idx){
+  events[idx].ack = true;
+  renderEvents();
+  if(!events.some(e => e.urgent && !e.ack)){
+    document.getElementById("emergencyBanner").style.display = "none";
+  }
+}
+window.acknowledge = acknowledge;
+
+/* ---------------------------------------------------------
+   LIVE MAP (Leaflet, real Lagos basemap)
+--------------------------------------------------------- */
+let liveMap, drawerMapInstance;
+
+function initLiveMap(){
+  liveMap = L.map('liveMap', { zoomControl:true, attributionControl:false }).setView([6.505, 3.385], 12);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    subdomains:'abcd', maxZoom:19
+  }).addTo(liveMap);
+
+  // route polylines
+  Object.keys(routeStops).forEach(route => {
+    const coords = routeStops[route].map(s => lagosCoords[s]);
+    L.polyline(coords, { color: routesMeta[route].color, weight:3, opacity:.85 }).addTo(liveMap);
+    routeStops[route].forEach(s => {
+      L.circleMarker(lagosCoords[s], { radius:3, color:routesMeta[route].color, fillColor:routesMeta[route].color, fillOpacity:.9, weight:1 })
+        .bindTooltip(s, { direction:'top', opacity:.9 })
+        .addTo(liveMap);
+    });
+  });
+
+  // vehicle markers
+  vehicles.forEach(v => addVehicleMarker(v, liveMap));
+}
+
+function addVehicleMarker(v, map){
+  const coord = lagosCoords[v.position];
+  if(!coord) return;
+  const color = v.status === "emergency" ? "#ea4f4a" : v.status === "late" ? "#e8a33d" : "#3fbe7a";
+  const icon = L.divIcon({
+    className:'',
+    html:`<div class="veh-marker"><div class="core" style="background:${color};${v.status==='emergency' ? 'box-shadow:0 0 0 6px rgba(234,79,74,.35);' : ''}"></div></div>`,
+    iconSize:[16,16], iconAnchor:[8,8]
+  });
+  L.marker(coord, { icon }).addTo(map)
+    .bindPopup(`<b>${v.id}</b> · ${v.route}<br>${v.position} → ${v.destination}<br>Deviation: <b>${fmtDev(v.deviation)}</b><br>Driver: ${v.driver}`)
+    .on('click', () => openDrawer(v.id));
+}
+
+function initDrawerMap(v){
+  const el = document.getElementById('drawerMap');
+  if(!el) return;
+  if(drawerMapInstance){ drawerMapInstance.remove(); drawerMapInstance = null; }
+
+  const coord = lagosCoords[v.position] || [6.5244,3.3792];
+  drawerMapInstance = L.map('drawerMap', { zoomControl:false, attributionControl:false, dragging:true, scrollWheelZoom:false }).setView(coord, 14);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { subdomains:'abcd', maxZoom:19 }).addTo(drawerMapInstance);
+
+  if(routeStops[v.route]){
+    const coords = routeStops[v.route].map(s => lagosCoords[s]);
+    L.polyline(coords, { color: routesMeta[v.route].color, weight:2.5, opacity:.6 }).addTo(drawerMapInstance);
+  }
+
+  const color = v.status === "emergency" ? "#ea4f4a" : v.status === "late" ? "#e8a33d" : "#3fbe7a";
+  const icon = L.divIcon({
+    className:'',
+    html:`<div class="veh-marker"><div class="core" style="width:16px;height:16px;background:${color};${v.status==='emergency' ? 'box-shadow:0 0 0 8px rgba(234,79,74,.3);' : ''}"></div></div>`,
+    iconSize:[20,20], iconAnchor:[10,10]
+  });
+  L.marker(coord, { icon }).addTo(drawerMapInstance);
+
+  setTimeout(() => drawerMapInstance && drawerMapInstance.invalidateSize(), 200);
+}
+
+/* ---------------------------------------------------------
+   DRAWER
+--------------------------------------------------------- */
+function openDrawer(id){
+  const v = vehicles.find(x => x.id === id);
+  if(!v) return;
+  const dc = devClass(v.deviation);
+  const isEmergency = v.status === "emergency";
+
+  document.getElementById("drawer").innerHTML = `
+    <div class="drawer-head">
+      <div>
+        <div class="veh-big">${v.id}</div>
+        ${routeTagHTML(v.route)}
+      </div>
+      <button class="drawer-close" onclick="closeDrawer()">✕</button>
+    </div>
+
+    ${isEmergency ? `
+    <div class="drawer-section" style="background:var(--danger-dim);border-bottom:1px solid rgba(234,79,74,.3);">
+      <h4 style="color:var(--danger);">Emergency call active</h4>
+      <div style="font-size:12px;color:#ffd7d5;">Target loudspeaker: driver. Connection reports 1 disconnected leg — retry or escalate to voice.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn" style="flex:1;">Retry call</button>
+        <button class="btn primary" style="flex:1;background:var(--danger-dim);border-color:rgba(234,79,74,.4);color:var(--danger);">Escalate</button>
+      </div>
+    </div>` : ``}
+
+    <div class="drawer-section">
+      <h4>Live status</h4>
+      <div class="kv"><span class="k">Position</span><span class="v">${v.position}</span></div>
+      <div class="kv"><span class="k">Destination</span><span class="v">${v.destination}</span></div>
+      <div class="kv"><span class="k">Deviation</span><span class="v dev ${dc}">${fmtDev(v.deviation)}</span></div>
+      <div class="kv"><span class="k">Layover</span><span class="v">${fmtSecs(v.layover)}</span></div>
+      <div class="kv"><span class="k">Driver</span><span class="v">${v.driver}</span></div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>Position</h4>
+      <div id="drawerMap"></div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>Vehicle attributes</h4>
+      <div class="kv"><span class="k">Block</span><span class="v">${v.block}</span></div>
+      <div class="kv"><span class="k">Plate</span><span class="v">${v.plate}</span></div>
+      <div class="kv"><span class="k">Type</span><span class="v" style="text-align:right;">${v.type}</span></div>
+      <div class="kv"><span class="k">Radio addr.</span><span class="v">${(v.id.length+3)}</span></div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>Recent history</h4>
+      ${historyHTML(v)}
+    </div>
+
+    <div class="drawer-actions">
+      <button class="btn">Announcement</button>
+      <button class="btn">Instruction</button>
+      <button class="btn">Path dispatch</button>
+    </div>
+  `;
+  document.getElementById("drawer").classList.add("open");
+  document.getElementById("scrim").classList.add("open");
+  document.getElementById("statusSelection").textContent = `${v.route}/ (${v.id})`;
+
+  document.querySelectorAll("tbody tr").forEach(tr => tr.classList.toggle("selected", tr.dataset.id === id));
+
+  requestAnimationFrame(() => initDrawerMap(v));
+}
+
+function closeDrawer(){
+  document.getElementById("drawer").classList.remove("open");
+  document.getElementById("scrim").classList.remove("open");
+}
+window.openDrawer = openDrawer;
+window.closeDrawer = closeDrawer;
+
+function historyHTML(v){
+  const base = v.status === "emergency"
+    ? [["15:37:58","Emergency triggered by driver"],["15:36:50","Deviation exceeded -0:04"],["14:56:00","Trip started, block "+v.block]]
+    : [["15:41:20","Position updated · "+v.position],["15:12:22","Vehicle log sync"],["14:56:00","Trip started, block "+v.block]];
+  return base.map(([t,e]) => `<div class="history-item"><span class="t">${t}</span><span class="e">${e}</span></div>`).join("");
+}
+
+/* ---------------------------------------------------------
+   NAV / VIEW SWITCH
+--------------------------------------------------------- */
+function switchView(name){
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-"+name));
+  document.querySelectorAll(".rail-btn").forEach(b => b.classList.toggle("active", b.dataset.view === name));
+  if(name === "route" && liveMap){
+    setTimeout(() => liveMap.invalidateSize(), 50);
+  }
+}
+window.switchView = switchView;
+
+document.querySelectorAll(".rail-btn[data-view]").forEach(btn => {
+  btn.addEventListener("click", () => switchView(btn.dataset.view));
+});
+
+document.getElementById("vehFilter").addEventListener("input", (e) => renderVehicleTable(e.target.value));
+
+/* ---------------------------------------------------------
+   CLOCK
+--------------------------------------------------------- */
+function tick(){
+  const now = new Date();
+  const time = now.toTimeString().slice(0,8);
+  const date = now.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+  document.getElementById("clockTime").textContent = time;
+  document.getElementById("clockDate").textContent = date;
+  document.getElementById("statusClock").textContent = `${time}, ${date}`;
+}
+tick();
+setInterval(tick, 1000);
+
+/* ---------------------------------------------------------
+   INIT
+--------------------------------------------------------- */
+renderOverview();
+renderVehicleTable();
+renderLadders();
+renderEvents();
+initLiveMap();
+</script>
+</body>
+</html>
